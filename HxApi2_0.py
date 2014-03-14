@@ -38,34 +38,40 @@ from numpy import fromstring
 import hexoskin.client
 import hexoskin.errors
 import apiErrors
-raw_datatypes = {'AccX' : 4145,
-    'AccY' : 4146,
-    'AccZ' : 4147,
+
+raw_datatypes = {'accx' : 4145,
+    'accy' : 4146,
+    'accz' : 4147,
     'ecg' : 4113,
-    'resp_thoracic' : 4129,
+    'ecg2' : 4114,
+    'ecg3' : 4115,
+    'resp_thor' : 4129,
     'resp_abdo' : 4130,
+    'temperature' : 81,
     'ppg' : 64
 }
 
-datatypes = {'act1s' : 49,
-    'hr' : 19,
-    'mv' : 36,
+datatypes = {'activity' : 49,
+    'cadence' : 53,
+    'heartrate' : 19,
+    'minuteventilation' : 36,
     'vt' : 37,
-    'r_rr' : 33,
+    'breathingrate' : 33,
     'hr_quality' : 1000,
     'br_quality' : 1001,
     'spo2_quality' : 1002,
-    'o2_saturation' : 66,
-    'blood_pressure' : 98,
+    'spo2' : 66,
+    'systolicpressure' : 98,
     'inspiration' : 34,
     'expiration' : 35,
-    'batterylevel' : 247,
-    'step_count' : 52,
-    'e_rr' : 18,
-    'qrs' : 17,
-    'qrs_amplitude' : 22,
+    'batt' : 247,
+    'step' : 52,
+    'rrinterval' : 18,
+    # 'qrs_old' : 17, # Removed because datatype 17 has been deprecated
+    'qrs' : 22,
     'button_annot' : 212,
-    'ptt' : 97
+    'ptt' : 97,
+    'annot':208
 }
 
 
@@ -102,19 +108,142 @@ class SessionInfo:
         if authCode != '':
             raise
 
-def getRecordData(auth,recordID, user, downloadRaw=True):
+def getRecordData(auth,recordID, downloadRaw=True):
     raw_dat = {}
     dat = {}
     final_dat = {}
+    # The following should work, however a bug is preventing multiple returns from list call. Iterate instead.
+    record = auth.api.record.get(recordID)
     if downloadRaw == True:
-        raw_dat = auth.api.datafile.list(record=recordID,datatype__in=raw_datatypes.values())
-    dat = auth.api.datafile.list(record=recordID,datatype__in=datatypes.values())
-    final_dat.update(raw_dat.response.result[0].data)
-    final_dat.update(dat.response.result[0].data)
+        raw_dat = auth.api.data.list(record=recordID,datatype__in=raw_datatypes.values())
+    dat = auth.api.data.list(record=recordID,datatype__in=datatypes.values())
+    final_dat.update(raw_dat.response.result[0].data.items())
+    final_dat.update(dat.response.result[0].data.items())
+    for k,v in datatypes.iteritems():
+        try:
+            final_dat[k] = final_dat.pop(v)
+        except:
+            print "No datatype found : " + str(v) + "-" + str(k)
+    if downloadRaw == True:
+        for k,v in raw_datatypes.iteritems():
+            try:
+                #Replace dict keys from datatype id to datatype name
+                final_dat[k] = final_dat.pop(v)
+            except:
+                print "No datatype found : " + str(v) + "-" + str(k)
+    final_dat['annotations'] = getRangeList(auth, limit="50", user=record.user.id , start=record.start, end=record.end)
+    final_dat['info'] = record.fields
+
+    final_dat = compressData(final_dat)
+
     return final_dat
+
+def getRangeData(auth,rangeID, downloadRaw=True):
+    raw_dat = {}
+    dat = {}
+    final_dat = {}
+    # The following should work, however a bug is preventing multiple returns from list call. Iterate instead.
+    if downloadRaw == True:
+        raw_dat = auth.api.data.list(range=rangeID,datatype__in=raw_datatypes.values())
+    dat = auth.api.data.list(record=rangeID,datatype__in=datatypes.values())
+    final_dat.update(raw_dat.response.result[0].data.items())
+    final_dat.update(dat.response.result[0].data.items())
+    for k,v in datatypes.iteritems():
+        try:
+            final_dat[k] = final_dat.pop(v)
+        except:
+            print "No datatype found : " + str(v) + "-" + str(k)
+    if downloadRaw == True:
+        for k,v in raw_datatypes.iteritems():
+            try:
+                final_dat[k] = final_dat.pop(v)
+            except:
+                print "No datatype found : " + str(v) + "-" + str(k)
+    return final_dat
+
+def getRecordList(auth, limit="20", user='', deviceFilter=''):
+    """
+    Returns the results list corresponding to the selected filters
+        @param auth:            The authentication token to use for the call
+        @param limit:           The limit of results to return. Passing 0 returns all the records
+        @param userFilter:      The ID of the user to look for
+        @param deviceFilter:    The device ID to look for. Takes the form HXSKIN12XXXXXXXX, where XXXXXXXX is the
+                                0-padded serial number. Example : HXSKIN1200001234
+        @return :               The record list
+    """
+    #TODO : if limit = 0 or 1000+, return correctly
+    """Yields all records info"""
+    filters = dict()
+    if limit != "20":
+        filters['limit'] = limit
+    if user != '':
+        filters['user'] = user
+    if deviceFilter != '':
+        filters['device'] = deviceFilter
+    out = auth.api.record.list(filters)
+    return out.response.result['objects']
+
+def getRangeList(auth, limit="20", user='', activitytype='', start='',end=''):
+    #TODO : if limit = 0 or 1000+, return correctly
+    """Yields all records info"""
+    filters = dict()
+    filters['order_by']='-start'
+    if limit != "20":
+        filters['limit'] = limit
+    if user != '':
+        filters['user'] = user
+    if activitytype != '':
+        filters['activitytype'] = activitytype
+    if start != '':
+        filters['start__gte'] = start
+    if end != '':
+        filters['end__lte'] = end
+    out = auth.api.range.list(filters)
+    return out.response.result['objects']
+
+def saveTxt(data,dirname):
+    # Receive data as a dictionnary. dict key will be the filename, and its values will be contained in the file.
+    if not os.path.isdir(dirname):
+        os.makedirs(dirname)
+    for k,v in data.items():
+        f = open(dirname + str(k) + '.txt', "w")
+        for entry in v:
+            if k == 'info':
+                pass
+            elif k == 'annotations':
+                pass
+            else:
+                linelen = len(entry)
+                for i, entrySub in enumerate(entry):
+                    if i == 0:
+                        f.write(str(long(round(entrySub))) + '\t')  # if timestamp is a float, convert to long integer
+                    elif i < linelen-1:
+                        f.write(str(entrySub) + '\t')
+                    else:
+                        f.write(str(entrySub) + '\n')
+        f.close()
 
 def clearCache(auth):
     auth.api.clear_resource_cache()
+
+def compressData(data):
+    for k,v in data.items():
+        if v == []:
+            data.pop(k)
+    if 'accx' in data:
+        # If acceleration is present in the data
+        data['acceleration'] = zip(*[[x[0] for x in data['accx']],[x[1] for x in data['accx']],[x[1] for x in data['accy']],[x[1] for x in data['accz']]])
+        data.pop('accx')
+        data.pop('accy')
+        data.pop('accz')
+    if 'ecg2' in data:
+        # If more than one ecg lead is present in the data
+        data['ecg'] = zip(*[[x[0] for x in data['ecg']],[x[1] for x in data['ecg']],[x[1] for x in data['ecg2']],[x[1] for x in data['ecg3']]])
+        data.pop('ecg2')
+        data.pop('ecg3')
+    if 'resp_thor' in data:
+        data['respiration'] = zip(*[[x[0] for x in data['resp_thor']],[x[1] for x in data['resp_thor']],[x[1] for x in data['resp_abdo']]])
+    return data
 
 def test_auth(api):
     try:
