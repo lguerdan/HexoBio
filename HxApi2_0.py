@@ -112,12 +112,11 @@ def getRecordData(auth,recordID, downloadRaw=True):
     raw_dat = {}
     dat = {}
     final_dat = {}
-    # The following should work, however a bug is preventing multiple returns from list call. Iterate instead.
     record = auth.api.record.get(recordID)
     if downloadRaw == True:
         raw_dat = auth.api.data.list(record=recordID,datatype__in=raw_datatypes.values())
+        final_dat.update(raw_dat.response.result[0].data.items())
     dat = auth.api.data.list(record=recordID,datatype__in=datatypes.values())
-    final_dat.update(raw_dat.response.result[0].data.items())
     final_dat.update(dat.response.result[0].data.items())
     for k,v in datatypes.iteritems():
         try:
@@ -133,20 +132,20 @@ def getRecordData(auth,recordID, downloadRaw=True):
                 print "No datatype found : " + str(v) + "-" + str(k)
     final_dat['annotations'] = getRangeList(auth, limit="50", user=record.user.id , start=record.start, end=record.end)
     final_dat['info'] = record.fields
-
     final_dat = compressData(final_dat)
-
     return final_dat
 
 def getRangeData(auth,rangeID, downloadRaw=True):
     raw_dat = {}
     dat = {}
     final_dat = {}
-    # The following should work, however a bug is preventing multiple returns from list call. Iterate instead.
+    rng = auth.api.range.get(rangeID)
+    user = rng.user.split('/')[-2]
     if downloadRaw == True:
         raw_dat = auth.api.data.list(range=rangeID,datatype__in=raw_datatypes.values())
-    dat = auth.api.data.list(record=rangeID,datatype__in=datatypes.values())
-    final_dat.update(raw_dat.response.result[0].data.items())
+        final_dat.update(raw_dat.response.result[0].data.items())
+    dat = auth.api.data.list(range=rangeID,datatype__in=datatypes.values())
+
     final_dat.update(dat.response.result[0].data.items())
     for k,v in datatypes.iteritems():
         try:
@@ -159,6 +158,9 @@ def getRangeData(auth,rangeID, downloadRaw=True):
                 final_dat[k] = final_dat.pop(v)
             except:
                 print "No datatype found : " + str(v) + "-" + str(k)
+    final_dat['annotations'] = getRangeList(auth, limit="50", user=user , start=rng.start, end=rng.end)
+    final_dat['info'] = rng.fields
+    final_dat = compressData(final_dat)
     return final_dat
 
 def getRecordList(auth, limit="20", user='', deviceFilter=''):
@@ -201,32 +203,11 @@ def getRangeList(auth, limit="20", user='', activitytype='', start='',end=''):
     out = auth.api.range.list(filters)
     return out.response.result['objects']
 
-def saveTxt(data,dirname):
-    # Receive data as a dictionnary. dict key will be the filename, and its values will be contained in the file.
-    if not os.path.isdir(dirname):
-        os.makedirs(dirname)
-    for k,v in data.items():
-        f = open(dirname + str(k) + '.txt', "w")
-        for entry in v:
-            if k == 'info':
-                pass
-            elif k == 'annotations':
-                pass
-            else:
-                linelen = len(entry)
-                for i, entrySub in enumerate(entry):
-                    if i == 0:
-                        f.write(str(long(round(entrySub))) + '\t')  # if timestamp is a float, convert to long integer
-                    elif i < linelen-1:
-                        f.write(str(entrySub) + '\t')
-                    else:
-                        f.write(str(entrySub) + '\n')
-        f.close()
-
 def clearCache(auth):
     auth.api.clear_resource_cache()
 
 def compressData(data):
+    #Very slow, find faster way around.
     for k,v in data.items():
         if v == []:
             data.pop(k)
@@ -244,6 +225,118 @@ def compressData(data):
     if 'resp_thor' in data:
         data['respiration'] = zip(*[[x[0] for x in data['resp_thor']],[x[1] for x in data['resp_thor']],[x[1] for x in data['resp_abdo']]])
     return data
+
+def saveRecordList(auth, recordList, mode, dirName="", limit='0', downloadRaw=True):
+    """
+    Save a record list in the selected format. Only the record's information will be saved (no data)
+        @param auth :       The authentication token to use for the call
+        @param recordList : The record list to save
+        @param mode :       The mode under which to save the record list.
+        @param downloadRaw :      Downlaod raw signal
+        @param dirname :    the directory under which to save the data
+    """
+    #TODO return error code if not saved correctly?
+    """save all records in a recordlist"""
+    mode = mode.lower()
+    for record in recordList:
+        sessId = record['sessionId']
+        info1 = getRecordInfo(auth, sessId, limit)
+
+        python = not os.path.isfile(os.path.join(dirName, info1['username'], 'session' + str(info1['sessionId']), 'dataFile.pkl'))
+        matlab = not os.path.isfile(os.path.join(dirName, info1['username'], 'session' + str(info1['sessionId']), 'dataFile.mat'))
+        if mode == 'python' and python or mode == 'matlab' and matlab or mode == 'pythonnumpymatlab' and (python or matlab):
+            data = getRecord(auth, sessId, 0, downloadRaw)
+            print "saving session:" + str(sessId)
+            if mode == 'python':
+                savePython(data, dirName)
+            elif mode == 'pythonnumpy':
+                savePythonNumpy(data, dirName)
+            elif mode == 'matlab':
+                saveMatlab(data, dirName)
+            elif  mode == 'pythonnumpymatlab':
+                saveMatlab(data, dirName)
+                savePythonNumpy(data, dirName)
+            else:
+                raise RuntimeWarning('saving mode not valid')
+        else:
+            print "data present not saved :" + str(sessId) + ', user:' + info1['username']
+
+
+def saveTxt(data,dirname):
+    # Receive data as a dictionnary. dict key will be the filename, and its values will be contained in the file.
+    if not os.path.isdir(dirname):
+        os.makedirs(dirname)
+    for k,v in data.items():
+        filestring = ''
+        f = open(dirname + str(k) + '.txt', "w")
+        if k == 'info':
+            for kk, vv in v.items():
+                filestring += '%s : %s\n' % (str(kk),str(vv))
+            pass
+        elif k == 'annotations':
+            for e in v:
+                filestring += '%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n' % (e['rank'], e['start'], e['end'], e['id'], e['name'], e['trainingroutine'], e['note'] )
+        else:
+            for entry in v:
+                linelen = len(entry)
+                for i, entrySub in enumerate(entry):
+                    if i == 0:
+                        filestring += (str(long(round(entrySub))) + '\t')  # if timestamp is a float, convert to long integer
+                    elif i < linelen-1:
+                        filestring += (str(entrySub) + '\t')
+                    else:
+                        filestring += (str(entrySub) + '\n')
+        f.write(filestring)
+        f.close()
+
+def saveMatlab(dataDict, DirName='', fileName=''):
+    """Get all data and save it in .mat format
+    If data already present in .mat, rewrite"""
+    import copy
+    import scipy.io
+    dataDict = convertToNumpy(dataDict)
+    fileName = chooseDir(dataDict, DirName, fileName)
+    if  fileName[-3:] == 'mat':
+        fileName = fileName[:-4]
+    scipy.io.savemat(fileName + '.mat', dataDict, appendmat=True, format='5', long_field_names=False, do_compression=False, oned_as='row')
+
+
+def convertToNumpy(dataDict):
+    import numpy as np
+    if 'channels' in dataDict:
+        data = dataDict['channels']
+        for name1 in data.viewkeys():
+            if type(data[name1]) == list:  # this is to access channels
+                data2 = np.array(data[name1])
+                freq1 = []
+                dt = []
+                typeSynchro = ['ecg', 'resp', 'acc']
+                freqSynchro = [256, 128, 25]
+                time1, startTime1, endTime1, data3, freq, dt, annotation = [], [], [], [], [], [], []
+                if name1 in typeSynchro:
+                    freq1 = freqSynchro[typeSynchro.index(name1)]
+                    dt = 256 / freq1
+                elif data2.shape[0] > 1:
+                    time1 = np.array((data2[:, 0]), dtype=np.int64)
+                    time1 = np.array(time1 - time1[0], dtype=np.int32)
+
+                if len(data2.shape) > 1:
+                    startTime1 = int(data2[0, 0])
+                    endTime1 = int(data2[-1, 0])
+                    if data2.shape[1] > 1:
+                        if name1 == 'annotation':
+                            annotation = list(data2[:, 1:])
+                        else:
+                            data3 = np.array((data2[:, 1:]), dtype=np.int16)
+                dataOut = {'startTime': startTime1,
+                           'endTime': endTime1,
+                           'freq': freq1,
+                           'dt': dt,
+                           'time': time1,
+                           'data': data3,
+                           'annotation': annotation}
+                data[name1] = dataOut
+    return dataDict
 
 def test_auth(api):
     try:
