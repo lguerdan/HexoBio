@@ -1,35 +1,4 @@
 __author__ = 'antoine'
-"""
-synchronous:
-    4145 : Acc X,
-    4146 : Acc Y,
-    4147 : Acc Z
-    49 : act1s,
-    50 : act15s,
-    51 : act5m
-    16 : ecg
-    19 : hr
-    36 : mv (minute ventilation),
-    37 : vt (ventilation time)
-    33 : respiration rate r_rr
-    4129 : resp thoracic, 4130 : resp abdominal
-    1000 : HR-quality, 1001, BR-quality, 1002: spo2-quality
-    64  :  PPG  PPG_CHANNEL_CHAR
-    66  : SPO2  Oxygen saturation.", "freq": 1,
-    98  : Blood Pressure
-asynchronous:
-    34 : respiration inspiration,
-    35 : expiration
-    247 : Battery level
-    52 : step detection count
-    18 : qrs interval e_rr
-    17 : qrs
-    22 : qrs amplitude
-    212 : button annotation
-    97:  Pulse Transit Time
-"""
-
-
 import os
 import base64
 import sys
@@ -74,6 +43,39 @@ datatypes = {'activity' : 49,
     'annot':208
 }
 
+dataSampleRate = {
+    4145 : 4,
+    4146 : 4,
+    4147 : 4,
+    4113 : 1,
+    4114 : 1,
+    4115 : 1,
+    4129 : 2,
+    4130 : 2,
+    81 : 256,
+    64 : 4,
+    49 : 256,
+    53 : 256,
+    19 : 256,
+    36 : 256,
+    37 : [],
+    33 : 256,
+    1000 : 256,
+    1001 : 256,
+    1002 : 256,
+    66 : 256,
+    98 : 256,
+    34 : 256,
+    35 : 256,
+    247 : 256,
+    52 : [],
+    18 : 256,
+    22 : 256,
+    212 : 256,
+    97 : 256,
+    208 : 256
+}
+
 
 class SessionInfo:
     """
@@ -114,22 +116,25 @@ def getRecordData(auth,recordID, downloadRaw=True):
     final_dat = {}
     record = auth.api.record.get(recordID)
     if downloadRaw == True:
-        raw_dat = auth.api.data.list(record=recordID,datatype__in=raw_datatypes.values())
-        final_dat.update(raw_dat.response.result[0].data.items())
-    dat = auth.api.data.list(record=recordID,datatype__in=datatypes.values())
-    final_dat.update(dat.response.result[0].data.items())
-    for k,v in datatypes.iteritems():
-        try:
-            final_dat[k] = final_dat.pop(v)
-        except:
-            print "No datatype found : " + str(v) + "-" + str(k)
-    if downloadRaw == True:
-        for k,v in raw_datatypes.iteritems():
-            try:
-                #Replace dict keys from datatype id to datatype name
-                final_dat[k] = final_dat.pop(v)
-            except:
-                print "No datatype found : " + str(v) + "-" + str(k)
+        for rawID in raw_datatypes:
+            raw_dat = getUnsubsampledData(auth=auth,userID=record.user,start=record.start,end=record.end,dataID=raw_datatypes[rawID])
+            final_dat[rawID]=raw_dat
+    for dataID in datatypes:
+        data = getUnsubsampledData(auth=auth,userID=record.user,start=record.start,end=record.end,dataID=datatypes[dataID])
+        final_dat[dataID]=data
+    #for k,v in datatypes.iteritems():
+    #    try:
+    #        final_dat[k] = final_dat.pop(v)
+    #    except:
+    #        print "No datatype found : " + str(v) + "-" + str(k)
+    #if downloadRaw == True:
+    #    for k,v in raw_datatypes.iteritems():
+    #        try:
+    #            #Replace dict keys from datatype id to datatype name
+    #            final_dat[k] = final_dat.pop(v)
+    #        except:
+    #            print "No datatype found : " + str(v) + "-" + str(k)
+
     final_dat['annotations'] = getRangeList(auth, limit="50", user=record.user.id , start=record.start, end=record.end)
     final_dat['info'] = record.fields
     final_dat = compressData(final_dat)
@@ -142,26 +147,46 @@ def getRangeData(auth,rangeID, downloadRaw=True):
     rng = auth.api.range.get(rangeID)
     user = rng.user.split('/')[-2]
     if downloadRaw == True:
-        raw_dat = auth.api.data.list(range=rangeID,datatype__in=raw_datatypes.values())
-        final_dat.update(raw_dat.response.result[0].data.items())
-    dat = auth.api.data.list(range=rangeID,datatype__in=datatypes.values())
-
-    final_dat.update(dat.response.result[0].data.items())
-    for k,v in datatypes.iteritems():
-        try:
-            final_dat[k] = final_dat.pop(v)
-        except:
-            print "No datatype found : " + str(v) + "-" + str(k)
-    if downloadRaw == True:
-        for k,v in raw_datatypes.iteritems():
-            try:
-                final_dat[k] = final_dat.pop(v)
-            except:
-                print "No datatype found : " + str(v) + "-" + str(k)
+        for rawID in raw_datatypes:
+            raw_dat = getUnsubsampledData(auth=auth,userID=rng.user,start=rng.start,end=rng.end,dataID=raw_datatypes[rawID])
+            final_dat[rawID]=raw_dat
+    for dataID in datatypes:
+        data = getUnsubsampledData(auth=auth,userID=rng.user,start=rng.start,end=rng.end,dataID=datatypes[dataID])
+        final_dat[dataID]=data
+    #for k,v in datatypes.iteritems():
+    #    try:
+    #        final_dat[k] = final_dat.pop(v)
+    #    except:
+    #        print "No datatype found : " + str(v) + "-" + str(k)
+    #if downloadRaw == True:
+    #    for k,v in raw_datatypes.iteritems():
+    #        try:
+    #            final_dat[k] = final_dat.pop(v)
+    #        except:
+    #            print "No datatype found : " + str(v) + "-" + str(k)
     final_dat['annotations'] = getRangeList(auth, limit="50", user=user , start=rng.start, end=rng.end)
     final_dat['info'] = rng.fields
     final_dat = compressData(final_dat)
     return final_dat
+
+def getUnsubsampledData(auth,userID,start,end,dataID):
+    out = []
+    datSampRate = dataSampleRate[dataID]    #Number of ticks between each sample
+    if datSampRate != []:
+        sampPerIter = 65535*datSampRate         #Number of ticks max size not to overflow 65535 max size
+        a = start
+        b = min(end,a+sampPerIter)
+        while a < end:
+            dat = auth.api.data.list(start=a,end=b,user=userID,datatype=dataID)
+            if len(dat.response.result) > 0:
+                out.extend(dat.response.result[0].data[dataID])
+            a = min(a + sampPerIter,end)
+            b = min(b + sampPerIter,end)
+    else:
+        dat = auth.api.data.list(start=start,end=end,user=userID,datatype=dataID)
+        out.extend(dat.response.result[0].data[dataID])
+    return out
+
 
 def getRecordList(auth, limit="20", user='', deviceFilter=''):
     """
@@ -224,6 +249,8 @@ def compressData(data):
         data.pop('ecg3')
     if 'resp_thor' in data:
         data['respiration'] = zip(*[[x[0] for x in data['resp_thor']],[x[1] for x in data['resp_thor']],[x[1] for x in data['resp_abdo']]])
+        data.pop('resp_thor')
+        data.pop('resp_abdo')
     return data
 
 def saveRecordList(auth, recordList, mode, dirName="", limit='0', downloadRaw=True):
@@ -289,54 +316,18 @@ def saveTxt(data,dirname):
         f.write(filestring)
         f.close()
 
-def saveMatlab(dataDict, DirName='', fileName=''):
+def saveMatlab(dataDict, dirname):
     """Get all data and save it in .mat format
     If data already present in .mat, rewrite"""
-    import copy
     import scipy.io
-    dataDict = convertToNumpy(dataDict)
-    fileName = chooseDir(dataDict, DirName, fileName)
-    if  fileName[-3:] == 'mat':
-        fileName = fileName[:-4]
-    scipy.io.savemat(fileName + '.mat', dataDict, appendmat=True, format='5', long_field_names=False, do_compression=False, oned_as='row')
+    if not os.path.isdir(dirname):
+        os.makedirs(dirname)
 
+    #Necessary as
+    dataDict.pop('info')
+    dataDict.pop('annotations')
 
-def convertToNumpy(dataDict):
-    import numpy as np
-    if 'channels' in dataDict:
-        data = dataDict['channels']
-        for name1 in data.viewkeys():
-            if type(data[name1]) == list:  # this is to access channels
-                data2 = np.array(data[name1])
-                freq1 = []
-                dt = []
-                typeSynchro = ['ecg', 'resp', 'acc']
-                freqSynchro = [256, 128, 25]
-                time1, startTime1, endTime1, data3, freq, dt, annotation = [], [], [], [], [], [], []
-                if name1 in typeSynchro:
-                    freq1 = freqSynchro[typeSynchro.index(name1)]
-                    dt = 256 / freq1
-                elif data2.shape[0] > 1:
-                    time1 = np.array((data2[:, 0]), dtype=np.int64)
-                    time1 = np.array(time1 - time1[0], dtype=np.int32)
-
-                if len(data2.shape) > 1:
-                    startTime1 = int(data2[0, 0])
-                    endTime1 = int(data2[-1, 0])
-                    if data2.shape[1] > 1:
-                        if name1 == 'annotation':
-                            annotation = list(data2[:, 1:])
-                        else:
-                            data3 = np.array((data2[:, 1:]), dtype=np.int16)
-                dataOut = {'startTime': startTime1,
-                           'endTime': endTime1,
-                           'freq': freq1,
-                           'dt': dt,
-                           'time': time1,
-                           'data': data3,
-                           'annotation': annotation}
-                data[name1] = dataOut
-    return dataDict
+    scipy.io.savemat(dirname + 'data.mat', dataDict, appendmat=True, format='5', long_field_names=False, do_compression=False, oned_as='row')
 
 def test_auth(api):
     try:
