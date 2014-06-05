@@ -279,18 +279,19 @@ def saveTxt(data,dirname):
         f.write(filestring)
         f.close()
 
-def saveMatlab(dataDict, dirname):
-    """Get all data and save it in .mat format
-    If data already present in .mat, rewrite"""
-    import scipy.io
-    if not os.path.isdir(dirname):
-        os.makedirs(dirname)
-
-    #Necessary as
-    dataDict.pop('info')
-    dataDict.pop('annotations')
-
-    scipy.io.savemat(dirname + 'data.mat', dataDict, appendmat=True, format='5', long_field_names=False, do_compression=False, oned_as='row')
+#def saveMatlab(dataDict, dirname):
+#    """Get all data and save it in .mat format
+#    Unsupported for now. Use saveTxt
+#    If data already present in .mat, rewrite"""
+#    import scipy.io
+#    if not os.path.isdir(dirname):
+#        os.makedirs(dirname)
+#
+#    #Necessary as
+#    dataDict.pop('info')
+#    dataDict.pop('annotations')
+#
+#    scipy.io.savemat(dirname + 'data.mat', dataDict, appendmat=True, format='5', long_field_names=False, do_compression=False, oned_as='row')
 
 def test_auth(api):
     try:
