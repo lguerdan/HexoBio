@@ -17,6 +17,8 @@ The source includes an example script allowing you to download record data. Do n
 For the API to work, you will need python 2.7 or more. You will also need the following libraries installed : Pickle, pycurl, requests, urllib and numpy
 Also, Matlab-related functionalities need the scipy library.
 
+For users recording with a CHA3000/Astroskin, set the MODEL variable to CHA3000 instead of Hexoskin at the top of HxApi2_0
+
 ## Running example
 To access the download user interface example, simply run in shell:
  
