@@ -1,48 +1,62 @@
 __author__ = 'antoine'
 import os
-import base64
-import sys
-
-from numpy import fromstring
 import hexoskin.client
 import hexoskin.errors
-import apiErrors
 
-raw_datatypes = {'accx' : 4145,
-    'accy' : 4146,
-    'accz' : 4147,
-    'ecg' : 4113,
-    'ecg2' : 4114,
-    'ecg3' : 4115,
-    'resp_thor' : 4129,
-    'resp_abdo' : 4130,
-    'temperature' : 81,
-    'ppg' : 64
-}
+#Specify Hexoskin or CHA3000
+MODEL = 'Hexoskin'
 
-datatypes = {'activity' : 49,
-    'cadence' : 53,
-    'heartrate' : 19,
-    'minuteventilation' : 36,
-    'vt' : 37,
-    'breathingrate' : 33,
-    'hr_quality' : 1000,
-    'br_quality' : 1001,
-    'spo2_quality' : 1002,
-    'spo2' : 66,
-    'systolicpressure' : 98,
-    'inspiration' : 34,
-    'expiration' : 35,
-    'batt' : 247,
-    'step' : 52,
-    'rrinterval' : 18,
-    # 'qrs_old' : 17, # Removed because datatype 17 has been deprecated
-    'qrs' : 22,
-    'button_annot' : 212,
-    'ptt' : 97,
-    'annot':208
-}
+#Datatypes definitions
+if MODEL == 'Hexoskin':
+    raw_datatypes = {'acc' : [4145,4146,4147],
+        'ecg' : [4113],
+        'resp' : [4129,4130]}
+    datatypes = {'activity' : [49],
+        'cadence' : [53],
+        'heartrate' : [19],
+        'minuteventilation' : [36],
+        'vt' : [37],
+        'breathingrate' : [33],
+        'hr_quality' : [1000],
+        'br_quality' : [1001],
+        'inspiration' : [34],
+        'expiration' : [35],
+        'batt' : [247],
+        'step' : [52],
+        'rrinterval' : [18],
+        # 'qrs_old' : 17, # Removed because datatype 17 has been deprecated
+        'qrs' : [22],
+    #    'button_annot' : [212]
+    }
+elif MODEL == 'CHA3000':
+    raw_datatypes = {'acc' : [4145,4146,4147],
+        'ecg' : [4113,4114,4115], # For CHA3000, use 'ecg' : [4113,4114,4115] instead
+        'resp' : [4129,4130],
+        'temperature' : [81],
+        'ppg' : [64] }
 
+    datatypes = {'activity' : [49],
+        'cadence' : [53],
+        'heartrate' : [19],
+        'minuteventilation' : [36],
+        'vt' : [37],
+        'breathingrate' : [33],
+        'hr_quality' : [1000],
+        'br_quality' : [1001],
+        'spo2_quality' : [1002],
+        'spo2' : [66],
+        'systolicpressure' : [98],
+        'inspiration' : [34],
+        'expiration' : [35],
+        'batt' : [247],
+        'step' : [52],
+        'rrinterval' : [18],
+        # 'qrs_old' : 17, # Removed because datatype 17 has been deprecated
+        'qrs' : [22],
+        #'button_annot' : [212],
+        'ptt' : [97] }
+
+#Sample rates definitions
 dataSampleRate = {
     4145 : 4,
     4146 : 4,
@@ -111,67 +125,55 @@ class SessionInfo:
             raise
 
 def getRecordData(auth,recordID, downloadRaw=True):
-    raw_dat = {}
-    dat = {}
-    final_dat = {}
+    """
+    This function allows you to specify a record, and it will manage the download of the different datatypes by itself
+    returns a dictionary containing all datatypes in separate entries
+    """
     record = auth.api.record.get(recordID)
-    if downloadRaw == True:
-        for rawID in raw_datatypes:
-            raw_dat = getUnsubsampledData(auth=auth,userID=record.user,start=record.start,end=record.end,dataID=raw_datatypes[rawID])
-            final_dat[rawID]=raw_dat
-    for dataID in datatypes:
-        data = getUnsubsampledData(auth=auth,userID=record.user,start=record.start,end=record.end,dataID=datatypes[dataID])
-        final_dat[dataID]=data
-    #for k,v in datatypes.iteritems():
-    #    try:
-    #        final_dat[k] = final_dat.pop(v)
-    #    except:
-    #        print "No datatype found : " + str(v) + "-" + str(k)
-    #if downloadRaw == True:
-    #    for k,v in raw_datatypes.iteritems():
-    #        try:
-    #            #Replace dict keys from datatype id to datatype name
-    #            final_dat[k] = final_dat.pop(v)
-    #        except:
-    #            print "No datatype found : " + str(v) + "-" + str(k)
+    final_dat = getData(auth=auth,user=record.user,start=record.start,end=record.end,downloadRaw=downloadRaw)
 
     final_dat['annotations'] = getRangeList(auth, limit="50", user=record.user.id , start=record.start, end=record.end)
     final_dat['info'] = record.fields
-    final_dat = compressData(final_dat)
+    #final_dat = compressData(final_dat)
     return final_dat
 
-def getRangeData(auth,rangeID, downloadRaw=True):
-    raw_dat = {}
-    dat = {}
+#def getRangeData(auth,rangeID, downloadRaw=True):
+#    """
+#    Unsupported for now, use getRecordData instead
+#    This function allows you to specify a range, and it will manage the download of the different datatypes by itself
+#    returns a dictionary containing all datatypes in separate entries
+#    """
+#    rng = auth.api.range.get(rangeID)
+#    final_dat = getData(auth=auth,user=rng.user,start=rng.start,end=rng.end,downloadRaw=downloadRaw)
+#
+#    final_dat['annotations'] = getRangeList(auth, limit="50", user=rng.user , start=rng.start, end=rng.end)
+#    final_dat['info'] = rng.fields
+#    #final_dat = compressData(final_dat)
+#    return final_dat
+
+def getData(auth,user,start,end,downloadRaw=True):
+    """
+    This function fetches the specified data range. Called by getRangeData and getRecordData
+    """
     final_dat = {}
-    rng = auth.api.range.get(rangeID)
-    user = rng.user.split('/')[-2]
     if downloadRaw == True:
         for rawID in raw_datatypes:
-            raw_dat = getUnsubsampledData(auth=auth,userID=rng.user,start=rng.start,end=rng.end,dataID=raw_datatypes[rawID])
+            print "Downloading" + rawID
+            raw_dat = getUnsubsampledData(auth=auth,userID=user,start=start,end=end,dataID=raw_datatypes[rawID])
             final_dat[rawID]=raw_dat
     for dataID in datatypes:
-        data = getUnsubsampledData(auth=auth,userID=rng.user,start=rng.start,end=rng.end,dataID=datatypes[dataID])
+        print "Downloading" + dataID
+        data = getUnsubsampledData(auth=auth,userID=user,start=start,end=end,dataID=datatypes[dataID])
         final_dat[dataID]=data
-    #for k,v in datatypes.iteritems():
-    #    try:
-    #        final_dat[k] = final_dat.pop(v)
-    #    except:
-    #        print "No datatype found : " + str(v) + "-" + str(k)
-    #if downloadRaw == True:
-    #    for k,v in raw_datatypes.iteritems():
-    #        try:
-    #            final_dat[k] = final_dat.pop(v)
-    #        except:
-    #            print "No datatype found : " + str(v) + "-" + str(k)
-    final_dat['annotations'] = getRangeList(auth, limit="50", user=user , start=rng.start, end=rng.end)
-    final_dat['info'] = rng.fields
-    final_dat = compressData(final_dat)
     return final_dat
 
 def getUnsubsampledData(auth,userID,start,end,dataID):
+    """
+    All data comes in subsampled form if the number of samples exceeds 65535. If this is the case, fetch data
+    page by page to prevent getting subsampled data.
+    """
     out = []
-    datSampRate = dataSampleRate[dataID]    #Number of ticks between each sample
+    datSampRate = dataSampleRate[dataID[0]]   #Number of ticks between each sample
     if datSampRate != []:
         sampPerIter = 65535*datSampRate         #Number of ticks max size not to overflow 65535 max size
         a = start
@@ -179,18 +181,21 @@ def getUnsubsampledData(auth,userID,start,end,dataID):
         while a < end:
             dat = auth.api.data.list(start=a,end=b,user=userID,datatype=dataID)
             if len(dat.response.result) > 0:
-                out.extend(dat.response.result[0].data[dataID])
+                ts = zip(*dat.response.result[0][u'data'].values()[0])[0]
+                data = [zip(*dat.response.result[0][u'data'][str(v)])[1] for v in dataID]
+                out.extend(zip(ts,*data))
             a = min(a + sampPerIter,end)
             b = min(b + sampPerIter,end)
     else:
         dat = auth.api.data.list(start=start,end=end,user=userID,datatype=dataID)
-        out.extend(dat.response.result[0].data[dataID])
+        if dat.response.result != []:
+            out.extend(dat.response.result[0]['data'][str(dataID[0])])
     return out
 
 
 def getRecordList(auth, limit="20", user='', deviceFilter=''):
     """
-    Returns the results list corresponding to the selected filters
+    Returns the results records corresponding to the selected filters
         @param auth:            The authentication token to use for the call
         @param limit:           The limit of results to return. Passing 0 returns all the records
         @param userFilter:      The ID of the user to look for
@@ -198,7 +203,6 @@ def getRecordList(auth, limit="20", user='', deviceFilter=''):
                                 0-padded serial number. Example : HXSKIN1200001234
         @return :               The record list
     """
-    #TODO : if limit = 0 or 1000+, return correctly
     """Yields all records info"""
     filters = dict()
     if limit != "20":
@@ -211,7 +215,9 @@ def getRecordList(auth, limit="20", user='', deviceFilter=''):
     return out.response.result['objects']
 
 def getRangeList(auth, limit="20", user='', activitytype='', start='',end=''):
-    #TODO : if limit = 0 or 1000+, return correctly
+    """
+    Returns the results ranges corresponding to the selected filters
+    """
     """Yields all records info"""
     filters = dict()
     filters['order_by']='-start'
@@ -228,69 +234,26 @@ def getRangeList(auth, limit="20", user='', activitytype='', start='',end=''):
     out = auth.api.range.list(filters)
     return out.response.result['objects']
 
-def clearCache(auth):
-    auth.api.clear_resource_cache()
-
-def compressData(data):
-    #Very slow, find faster way around.
-    for k,v in data.items():
-        if v == []:
-            data.pop(k)
-    if 'accx' in data:
-        # If acceleration is present in the data
-        data['acceleration'] = zip(*[[x[0] for x in data['accx']],[x[1] for x in data['accx']],[x[1] for x in data['accy']],[x[1] for x in data['accz']]])
-        data.pop('accx')
-        data.pop('accy')
-        data.pop('accz')
-    if 'ecg2' in data:
-        # If more than one ecg lead is present in the data
-        data['ecg'] = zip(*[[x[0] for x in data['ecg']],[x[1] for x in data['ecg']],[x[1] for x in data['ecg2']],[x[1] for x in data['ecg3']]])
-        data.pop('ecg2')
-        data.pop('ecg3')
-    if 'resp_thor' in data:
-        data['respiration'] = zip(*[[x[0] for x in data['resp_thor']],[x[1] for x in data['resp_thor']],[x[1] for x in data['resp_abdo']]])
-        data.pop('resp_thor')
-        data.pop('resp_abdo')
-    return data
-
-def saveRecordList(auth, recordList, mode, dirName="", limit='0', downloadRaw=True):
+def getRecordInfo (auth, recordID):
     """
-    Save a record list in the selected format. Only the record's information will be saved (no data)
+    Get selected record information
         @param auth :       The authentication token to use for the call
-        @param recordList : The record list to save
-        @param mode :       The mode under which to save the record list.
-        @param downloadRaw :      Downlaod raw signal
-        @param dirname :    the directory under which to save the data
+        @param recordID :   The record to save's ID
+        @return :           A dictionary of record information
     """
-    #TODO return error code if not saved correctly?
-    """save all records in a recordlist"""
-    mode = mode.lower()
-    for record in recordList:
-        sessId = record['sessionId']
-        info1 = getRecordInfo(auth, sessId, limit)
+    # extract (version hardware, version software, user info, group)
+    obj = auth.api.record.get(recordID)
+    return obj.fields
 
-        python = not os.path.isfile(os.path.join(dirName, info1['username'], 'session' + str(info1['sessionId']), 'dataFile.pkl'))
-        matlab = not os.path.isfile(os.path.join(dirName, info1['username'], 'session' + str(info1['sessionId']), 'dataFile.mat'))
-        if mode == 'python' and python or mode == 'matlab' and matlab or mode == 'pythonnumpymatlab' and (python or matlab):
-            data = getRecord(auth, sessId, 0, downloadRaw)
-            print "saving session:" + str(sessId)
-            if mode == 'python':
-                savePython(data, dirName)
-            elif mode == 'pythonnumpy':
-                savePythonNumpy(data, dirName)
-            elif mode == 'matlab':
-                saveMatlab(data, dirName)
-            elif  mode == 'pythonnumpymatlab':
-                saveMatlab(data, dirName)
-                savePythonNumpy(data, dirName)
-            else:
-                raise RuntimeWarning('saving mode not valid')
-        else:
-            print "data present not saved :" + str(sessId) + ', user:' + info1['username']
-
+def clearCache(auth):
+    """
+    This function clears the API cache. To be used only if the resource list changes, which shouldn't happen often
+    """
+    auth.api.clear_resource_cache()
 
 def saveTxt(data,dirname):
     # Receive data as a dictionnary. dict key will be the filename, and its values will be contained in the file.
+    dirname = dirname + str(data['info'][u'user'].email) + '/' + str(data['info']['id'])+ '/' #construct a reasonable name for the file
     if not os.path.isdir(dirname):
         os.makedirs(dirname)
     for k,v in data.items():
