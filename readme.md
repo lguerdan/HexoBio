@@ -19,6 +19,9 @@ Also, Matlab-related functionalities need the scipy library.
 
 For users recording with a CHA3000/Astroskin, set the MODEL variable to CHA3000 instead of Hexoskin at the top of HxApi2_0
 
+You can also set the output format of the timestamp in a similar manner. Just set the TIMESTAMP variable at the beginning of HxApi2_0, and TIMESTAMP_FORMAT if using String formats.
+
+
 ## Running example
 To access the download user interface example, simply run in shell:
  

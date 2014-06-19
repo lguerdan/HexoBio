@@ -1,10 +1,14 @@
 __author__ = 'antoine'
-import os
-import hexoskin.client
-import hexoskin.errors
 
-#Specify Hexoskin or CHA3000
+import os, datetime
+import hexoskin.client, hexoskin.errors
+
+#Model type : Hexoskin or CHA3000
 MODEL = 'Hexoskin'
+#Specify timestamp output format : Epoch or String. Epoch goes for the standard Hexoskin epoch, while String is human-formatted string
+TIMESTAMP = 'Epoch'
+#Timestamp format, as described in https://docs.python.org/2/library/datetime.html#strftime-and-strptime-behavior
+TIMESTAMP_FORMAT = '%Y:%m:%d\t%H:%M:%S:%f'
 
 #Datatypes definitions
 if MODEL == 'Hexoskin':
@@ -190,8 +194,23 @@ def getUnsubsampledData(auth,userID,start,end,dataID):
         dat = auth.api.data.list(start=start,end=end,user=userID,datatype=dataID)
         if dat.response.result != []:
             out.extend(dat.response.result[0]['data'][str(dataID[0])])
+    if TIMESTAMP == 'String':
+        out = convertTimestamps(out)
     return out
 
+def convertTimestamps(arr):
+    out = []
+    for i in arr:
+        if len(arr[0]) == 1:
+            ts = datetime.datetime.fromtimestamp(float(i)/256).strftime(TIMESTAMP_FORMAT)
+            out.append(ts)
+        elif len(arr[0]) > 1:
+            ts = datetime.datetime.fromtimestamp(float(i[0])/256).strftime(TIMESTAMP_FORMAT)
+            line = []
+            line.append(ts)
+            [line.append(x) for x in i[1:]]
+            out.append(tuple(line))
+    return out
 
 def getRecordList(auth, limit="20", user='', deviceFilter=''):
     """
@@ -271,7 +290,7 @@ def saveTxt(data,dirname):
                 linelen = len(entry)
                 for i, entrySub in enumerate(entry):
                     if i == 0:
-                        filestring += (str(long(round(entrySub))) + '\t')  # if timestamp is a float, convert to long integer
+                        filestring += (str(entrySub) + '\t')  # if timestamp is a float, convert to long integer
                     elif i < linelen-1:
                         filestring += (str(entrySub) + '\t')
                     else:
