@@ -184,7 +184,7 @@ def getUnsubsampledData(auth,userID,start,end,dataID):
         b = min(end,a+sampPerIter)
         while a < end:
             dat = auth.api.data.list(start=a,end=b,user=userID,datatype=dataID)
-            if len(dat.response.result) > 0:
+            if len(dat.response.result[0]['data'].values()[0]) > 0:
                 ts = zip(*dat.response.result[0][u'data'].values()[0])[0]
                 data = [zip(*dat.response.result[0][u'data'][str(v)])[1] for v in dataID]
                 out.extend(zip(ts,*data))
