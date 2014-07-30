@@ -1,9 +1,8 @@
 
 __author__ = 'antoine'
 
-import sys,HxApi2_0
 from os.path import expanduser
-import getpass
+import getpass, sys,HxApi2_0
 def main(argv):
     '''
     To tests this script, either run it from here, of call "python exampleScript2.py" from the terminal.

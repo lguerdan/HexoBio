@@ -5,9 +5,12 @@ import hexoskin.client, hexoskin.errors
 
 #Model type : Hexoskin or CHA3000
 MODEL = 'Hexoskin'
+
 #Specify timestamp output format : Epoch or String. Epoch goes for the standard Hexoskin epoch, while String is human-formatted string
 TIMESTAMP = 'Epoch'
+
 #Timestamp format, as described in https://docs.python.org/2/library/datetime.html#strftime-and-strptime-behavior
+#Use only if TIMESTAMP is set to String
 TIMESTAMP_FORMAT = '%Y:%m:%d\t%H:%M:%S:%f'
 
 #Datatypes definitions
@@ -28,9 +31,7 @@ if MODEL == 'Hexoskin':
         'batt' : [247],
         'step' : [52],
         'rrinterval' : [18],
-        # 'qrs_old' : 17, # Removed because datatype 17 has been deprecated
         'qrs' : [22],
-    #    'button_annot' : [212]
     }
 elif MODEL == 'CHA3000':
     raw_datatypes = {'acc' : [4145,4146,4147],
@@ -55,9 +56,7 @@ elif MODEL == 'CHA3000':
         'batt' : [247],
         'step' : [52],
         'rrinterval' : [18],
-        # 'qrs_old' : 17, # Removed because datatype 17 has been deprecated
         'qrs' : [22],
-        #'button_annot' : [212],
         'ptt' : [97] }
 
 #Sample rates definitions
@@ -138,7 +137,6 @@ def getRecordData(auth,recordID, downloadRaw=True):
 
     final_dat['annotations'] = getRangeList(auth, limit="50", user=record.user.id , start=record.start, end=record.end)
     final_dat['info'] = record.fields
-    #final_dat = compressData(final_dat)
     return final_dat
 
 #def getRangeData(auth,rangeID, downloadRaw=True):
@@ -166,7 +164,7 @@ def getData(auth,user,start,end,downloadRaw=True):
             raw_dat = getUnsubsampledData(auth=auth,userID=user,start=start,end=end,dataID=raw_datatypes[rawID])
             final_dat[rawID]=raw_dat
     for dataID in datatypes:
-        print "Downloading" + dataID
+        print "Downloading " + dataID
         data = getUnsubsampledData(auth=auth,userID=user,start=start,end=end,dataID=datatypes[dataID])
         final_dat[dataID]=data
     return final_dat
@@ -194,22 +192,24 @@ def getUnsubsampledData(auth,userID,start,end,dataID):
         dat = auth.api.data.list(start=start,end=end,user=userID,datatype=dataID)
         if dat.response.result != []:
             out.extend(dat.response.result[0]['data'][str(dataID[0])])
-    if TIMESTAMP == 'String':
-        out = convertTimestamps(out)
+    out = convertTimestamps(out,TIMESTAMP)
     return out
 
-def convertTimestamps(arr):
-    out = []
-    for i in arr:
-        if len(arr[0]) == 1:
-            ts = datetime.datetime.fromtimestamp(float(i)/256).strftime(TIMESTAMP_FORMAT)
-            out.append(ts)
-        elif len(arr[0]) > 1:
-            ts = datetime.datetime.fromtimestamp(float(i[0])/256).strftime(TIMESTAMP_FORMAT)
-            line = []
-            line.append(ts)
-            [line.append(x) for x in i[1:]]
-            out.append(tuple(line))
+def convertTimestamps(arr, format):
+    if format == 'Epoch':
+        out = arr
+    if format == 'String':
+        out = []
+        for i in arr:
+            if len(arr[0]) == 1:
+                ts = datetime.datetime.fromtimestamp(float(i)/256).strftime(TIMESTAMP_FORMAT)
+                out.append(ts)
+            elif len(arr[0]) > 1:
+                ts = datetime.datetime.fromtimestamp(float(i[0])/256).strftime(TIMESTAMP_FORMAT)
+                line = []
+                line.append(ts)
+                [line.append(x) for x in i[1:]]
+                out.append(tuple(line))
     return out
 
 def getRecordList(auth, limit="20", user='', deviceFilter=''):
