@@ -122,7 +122,7 @@ class SessionInfo:
         else:
             raise NotImplementedError
         print apiurl
-        self.api = hexoskin.client.HexoApi(publicKey, privateKey, base_url=apiurl, user_auth=username + ':' + password, api_version='2.0.x')
+        self.api = hexoskin.client.HexoApi(publicKey, privateKey, base_url=apiurl, user_auth=username + ':' + password, api_version='3.0.x')
         authCode = test_auth(self.api)
         if authCode != '':
             raise
@@ -133,11 +133,28 @@ def getRecordData(auth,recordID, downloadRaw=True):
     returns a dictionary containing all datatypes in separate entries
     """
     record = auth.api.record.get(recordID)
-    final_dat = getData(auth=auth,user=record.user,start=record.start,end=record.end,downloadRaw=downloadRaw)
-
+    final_dat = getData(auth=auth,user=record.user,start=record.start,end=record.end, downloadRaw=downloadRaw)
     final_dat['annotations'] = getRangeList(auth, limit="50", user=record.user.id , start=record.start, end=record.end)
+    final_dat['track'] = getTrackPoints(auth,record.user.id , final_dat['annotations'])
     final_dat['info'] = record.fields
     return final_dat
+
+def getTrackPoints(auth, userID, ranges):
+    tracklist = []
+    trackpoints = []
+    trackpointLines = []
+    for r in ranges:
+        track = auth.api.track.list(user=userID, range__in=r['id'])
+        if track.response.result['objects']:
+            tracklist.append(track.response.result['objects'][0])
+    for t in tracklist:
+        trackpoint = auth.api.trackpoint.list(track=t['id'],limit=0,order_by='time')
+        trackpoints.extend(trackpoint.response.result['objects'])
+
+    for t in trackpoints:
+        trackpointLines.append((t['time'],t['altitude'],t['position'][0],t['position'][1],t['horizontal_accuracy']))
+    return trackpointLines
+
 
 #def getRangeData(auth,rangeID, downloadRaw=True):
 #    """
@@ -239,7 +256,7 @@ def getRangeList(auth, limit="20", user='', activitytype='', start='',end=''):
     """
     """Yields all records info"""
     filters = dict()
-    filters['order_by']='-start'
+    filters['order_by']='start'
     if limit != "20":
         filters['limit'] = limit
     if user != '':

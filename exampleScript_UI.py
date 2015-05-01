@@ -69,7 +69,7 @@ def main(argv):
                 try:
                     data = HxApi2_0.getRecordData(auth,recordID=r)
                     HxApi2_0.saveTxt(data,expanduser('~')+'/Downloads/HexoskinData/')
-                except  :
+                except:
                     print "Problem loading record (skipped) : " + str(r)
                     index+=1
         elif opt=='4':
