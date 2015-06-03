@@ -300,8 +300,9 @@ def saveTxt(data,dirname):
                 filestring += '%s : %s\n' % (str(kk),str(vv))
             pass
         elif k == 'annotations':
+            filestring += 'rank\tstart\tend\tid\tname\ttrainingroutine\tnote\n'
             for e in v:
-                filestring += '%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n' % (e['rank'], e['start'], e['end'], e['id'], e['name'], e['trainingroutine'], e['note'] )
+                filestring += '%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n' % (e['rank'], e['start'], e['end'], e['id'], e['name'], e['context']['trainingroutine'], e['note'] )
         else:
             for entry in v:
                 linelen = len(entry)
