@@ -1,96 +1,103 @@
 __author__ = 'antoine'
 
-import os, datetime
-import hexoskin.client, hexoskin.errors
+import datetime
+import os
+import time
+import hexoskin.client
+import hexoskin.errors
+import requests
 
-#Model type : Hexoskin or CHA3000
+requests.packages.urllib3.disable_warnings()
+
+# Model type : Hexoskin or CHA3000
 MODEL = 'Hexoskin'
 
-#Specify timestamp output format : Epoch or String. Epoch goes for the standard Hexoskin epoch, while String is human-formatted string
+# Specify timestamp output format : Epoch or String. Epoch goes for the standard Hexoskin epoch, while String is human-formatted string
 TIMESTAMP = 'Epoch'
 
-#Timestamp format, as described in https://docs.python.org/2/library/datetime.html#strftime-and-strptime-behavior
-#Use only if TIMESTAMP is set to String
+# Timestamp format, as described in https://docs.python.org/2/library/datetime.html#strftime-and-strptime-behavior
+# Use only if TIMESTAMP is set to String
 TIMESTAMP_FORMAT = '%Y:%m:%d\t%H:%M:%S:%f'
 
-#Datatypes definitions
+# Datatypes definitions
 if MODEL == 'Hexoskin':
-    raw_datatypes = {'acc' : [4145,4146,4147],
-        'ecg' : [4113],
-        'resp' : [4129,4130]}
-    datatypes = {'activity' : [49],
-        'cadence' : [53],
-        'heartrate' : [19],
-        'minuteventilation' : [36],
-        'vt' : [37],
-        'breathingrate' : [33],
-        'hr_quality' : [1000],
-        'br_quality' : [1001],
-        'inspiration' : [34],
-        'expiration' : [35],
-        'batt' : [247],
-        'step' : [52],
-        'rrinterval' : [18],
-        'qrs' : [22],
+    raw_datatypes = {'acc':[4145,4146,4147],
+        'ecg':[4113],
+        'resp':[4129,4130]}
+    datatypes = {'activity':[49],
+        'cadence':[53],
+        'heartrate':[19],
+        'minuteventilation':[36],
+        'vt':[37],
+        'breathingrate':[33],
+        'hr_quality':[1000],
+        'br_quality':[1001],
+        'inspiration':[34],
+        'expiration':[35],
+        'batt':[247],
+        'step':[52],
+        'rrinterval':[18],
+        'qrs':[22],
     }
+
 elif MODEL == 'CHA3000':
-    raw_datatypes = {'acc' : [4145,4146,4147],
-        'ecg' : [4113,4114,4115], # For CHA3000, use 'ecg' : [4113,4114,4115] instead
-        'resp' : [4129,4130],
-        'temperature' : [81],
-        'ppg' : [64] }
+    raw_datatypes = {'acc':[4145,4146,4147],
+        'ecg':[4113,4114,4115],  # For CHA3000, use 'ecg':[4113,4114,4115] instead
+        'resp':[4129,4130],
+        'temperature':[81],
+        'ppg':[64]}
 
-    datatypes = {'activity' : [49],
-        'cadence' : [53],
-        'heartrate' : [19],
-        'minuteventilation' : [36],
-        'vt' : [37],
-        'breathingrate' : [33],
-        'hr_quality' : [1000],
-        'br_quality' : [1001],
-        'spo2_quality' : [1002],
-        'spo2' : [66],
-        'systolicpressure' : [98],
-        'inspiration' : [34],
-        'expiration' : [35],
-        'batt' : [247],
-        'step' : [52],
-        'rrinterval' : [18],
-        'qrs' : [22],
-        'ptt' : [97] }
+    datatypes = {'activity':[49],
+        'cadence':[53],
+        'heartrate':[19],
+        'minuteventilation':[36],
+        'vt':[37],
+        'breathingrate':[33],
+        'hr_quality':[1000],
+        'br_quality':[1001],
+        'spo2_quality':[1002],
+        'spo2':[66],
+        'systolicpressure':[98],
+        'inspiration':[34],
+        'expiration':[35],
+        'batt':[247],
+        'step':[52],
+        'rrinterval':[18],
+        'qrs':[22],
+        'ptt':[97]}
 
-#Sample rates definitions
+#  Sample rates definitions (in 256/samples/second)
 dataSampleRate = {
-    4145 : 4,
-    4146 : 4,
-    4147 : 4,
-    4113 : 1,
-    4114 : 1,
-    4115 : 1,
-    4129 : 2,
-    4130 : 2,
-    81 : 256,
-    64 : 4,
-    49 : 256,
-    53 : 256,
-    19 : 256,
-    36 : 256,
-    37 : [],
-    33 : 256,
-    1000 : 256,
-    1001 : 256,
-    1002 : 256,
-    66 : 256,
-    98 : 256,
-    34 : 256,
-    35 : 256,
-    247 : 256,
-    52 : [],
-    18 : 256,
-    22 : 256,
-    212 : 256,
-    97 : 256,
-    208 : 256
+    4145:4,  # 64Hz
+    4146:4,
+    4147:4,
+    4113:1,  # 256Hz
+    4114:1,
+    4115:1,
+    4129:2,  # 128Hz
+    4130:2,
+    81:256,  # 1Hz
+    64:4,
+    49:256,
+    53:256,
+    19:256,
+    36:256,
+    37:[],
+    33:256,
+    1000:256,
+    1001:256,
+    1002:256,
+    66:256,
+    98:256,
+    34:256,
+    35:256,
+    247:256,
+    52:[],
+    18:256,
+    22:256,
+    212:256,
+    97:256,
+    208:256
 }
 
 
@@ -127,6 +134,7 @@ class SessionInfo:
         if authCode != '':
             raise
 
+
 def getRecordData(auth,recordID, downloadRaw=True):
     """
     This function allows you to specify a record, and it will manage the download of the different datatypes by itself
@@ -138,6 +146,7 @@ def getRecordData(auth,recordID, downloadRaw=True):
     final_dat['track'] = getTrackPoints(auth,record.user.id , final_dat['annotations'])
     final_dat['info'] = record.fields
     return final_dat
+
 
 def getTrackPoints(auth, userID, ranges):
     tracklist = []
@@ -156,26 +165,12 @@ def getTrackPoints(auth, userID, ranges):
     return trackpointLines
 
 
-#def getRangeData(auth,rangeID, downloadRaw=True):
-#    """
-#    Unsupported for now, use getRecordData instead
-#    This function allows you to specify a range, and it will manage the download of the different datatypes by itself
-#    returns a dictionary containing all datatypes in separate entries
-#    """
-#    rng = auth.api.range.get(rangeID)
-#    final_dat = getData(auth=auth,user=rng.user,start=rng.start,end=rng.end,downloadRaw=downloadRaw)
-#
-#    final_dat['annotations'] = getRangeList(auth, limit="50", user=rng.user , start=rng.start, end=rng.end)
-#    final_dat['info'] = rng.fields
-#    #final_dat = compressData(final_dat)
-#    return final_dat
-
 def getData(auth,user,start,end,downloadRaw=True):
     """
     This function fetches the specified data range. Called by getRangeData and getRecordData
     """
     final_dat = {}
-    if downloadRaw == True:
+    if downloadRaw is True:
         for rawID in raw_datatypes:
             print "Downloading" + rawID
             raw_dat = getUnsubsampledData(auth=auth,userID=user,start=start,end=end,dataID=raw_datatypes[rawID])
@@ -186,15 +181,16 @@ def getData(auth,user,start,end,downloadRaw=True):
         final_dat[dataID]=data
     return final_dat
 
+
 def getUnsubsampledData(auth,userID,start,end,dataID):
     """
     All data comes in subsampled form if the number of samples exceeds 65535. If this is the case, fetch data
     page by page to prevent getting subsampled data.
     """
     out = []
-    datSampRate = dataSampleRate[dataID[0]]   #Number of ticks between each sample
+    datSampRate = dataSampleRate[dataID[0]]  # Number of ticks between each sample
     if datSampRate != []:
-        sampPerIter = 65535*datSampRate         #Number of ticks max size not to overflow 65535 max size
+        sampPerIter = 65535*datSampRate  # Number of ticks max size not to overflow 65535 max size
         a = start
         b = min(end,a+sampPerIter)
         while a < end:
@@ -205,12 +201,14 @@ def getUnsubsampledData(auth,userID,start,end,dataID):
                 out.extend(zip(ts,*data))
             a = min(a + sampPerIter,end)
             b = min(b + sampPerIter,end)
+            time.sleep(0.2)  # Rate limiting to stay below 5 requests per second
     else:
         dat = auth.api.data.list(start=start,end=end,user=userID,datatype=dataID)
         if dat.response.result != []:
             out.extend(dat.response.result[0]['data'][str(dataID[0])])
     out = convertTimestamps(out,TIMESTAMP)
     return out
+
 
 def convertTimestamps(arr, format):
     if format == 'Epoch':
@@ -228,6 +226,7 @@ def convertTimestamps(arr, format):
                 [line.append(x) for x in i[1:]]
                 out.append(tuple(line))
     return out
+
 
 def getRecordList(auth, limit="20", user='', deviceFilter=''):
     """
@@ -250,6 +249,7 @@ def getRecordList(auth, limit="20", user='', deviceFilter=''):
     out = auth.api.record.list(filters)
     return out.response.result['objects']
 
+
 def getRangeList(auth, limit="20", user='', activitytype='', start='',end=''):
     """
     Returns the results ranges corresponding to the selected filters
@@ -270,6 +270,7 @@ def getRangeList(auth, limit="20", user='', activitytype='', start='',end=''):
     out = auth.api.range.list(filters)
     return out.response.result['objects']
 
+
 def getRecordInfo (auth, recordID):
     """
     Get selected record information
@@ -281,15 +282,17 @@ def getRecordInfo (auth, recordID):
     obj = auth.api.record.get(recordID)
     return obj.fields
 
+
 def clearCache(auth):
     """
     This function clears the API cache. To be used only if the resource list changes, which shouldn't happen often
     """
     auth.api.clear_resource_cache()
 
+
 def saveTxt(data,dirname):
     # Receive data as a dictionnary. dict key will be the filename, and its values will be contained in the file.
-    dirname = dirname + str(data['info'][u'user'].email) + '/' + str(data['info']['id'])+ '/' #construct a reasonable name for the file
+    dirname = dirname + str(data['info'][u'user'].email) + '/' + str(data['info']['id'])+ '/'  # construct a reasonable name for the file
     if not os.path.isdir(dirname):
         os.makedirs(dirname)
     for k,v in data.items():
@@ -302,7 +305,7 @@ def saveTxt(data,dirname):
         elif k == 'annotations':
             filestring += 'rank\tstart\tend\tid\tname\ttrainingroutine\tnote\n'
             for e in v:
-                filestring += '%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n' % (e['rank'], e['start'], e['end'], e['id'], e['name'], e['context']['trainingroutine'], e['note'] )
+                filestring += '%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n' % (e['rank'], e['start'], e['end'], e['id'], e['name'], e['context']['trainingroutine'], e['note'])
         else:
             for entry in v:
                 linelen = len(entry)
@@ -316,19 +319,6 @@ def saveTxt(data,dirname):
         f.write(filestring)
         f.close()
 
-#def saveMatlab(dataDict, dirname):
-#    """Get all data and save it in .mat format
-#    Unsupported for now. Use saveTxt
-#    If data already present in .mat, rewrite"""
-#    import scipy.io
-#    if not os.path.isdir(dirname):
-#        os.makedirs(dirname)
-#
-#    #Necessary as
-#    dataDict.pop('info')
-#    dataDict.pop('annotations')
-#
-#    scipy.io.savemat(dirname + 'data.mat', dataDict, appendmat=True, format='5', long_field_names=False, do_compression=False, oned_as='row')
 
 def test_auth(api):
     try:
