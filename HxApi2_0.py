@@ -129,7 +129,7 @@ class SessionInfo:
         else:
             raise NotImplementedError
         print apiurl
-        self.api = hexoskin.client.HexoApi(publicKey, privateKey, base_url=apiurl, user_auth=username + ':' + password, api_version='3.0.x')
+        self.api = hexoskin.client.HexoApi(publicKey, privateKey, base_url=apiurl, auth=username + ':' + password, api_version = '3.3.x')
         authCode = test_auth(self.api)
         if authCode != '':
             raise
@@ -323,7 +323,7 @@ def saveTxt(data,dirname):
 def test_auth(api):
     try:
         api.account.list()
-    except hexoskin.errors.HttpUnauthorized, e:
+    except Exception, e:
         if e.response.result == '':
             return 'login_invalid'
         elif e.response.result['error'] == 'API signature failed.':
