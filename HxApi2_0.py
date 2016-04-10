@@ -1,5 +1,3 @@
-__author__ = 'antoine'
-
 import datetime
 import os
 import time
@@ -13,31 +11,32 @@ requests.packages.urllib3.disable_warnings()
 MODEL = 'Hexoskin'
 
 # Specify timestamp output format : Epoch or String. Epoch goes for the standard Hexoskin epoch, while String is human-formatted string
-TIMESTAMP = 'Epoch'
+TIMESTAMP = 'String'
 
 # Timestamp format, as described in https://docs.python.org/2/library/datetime.html#strftime-and-strptime-behavior
 # Use only if TIMESTAMP is set to String
-TIMESTAMP_FORMAT = '%Y:%m:%d\t%H:%M:%S:%f'
+TIMESTAMP_FORMAT = '%Y:%m:%d-%H:%M:%S:%f'
 
 # Datatypes definitions
 if MODEL == 'Hexoskin':
-    raw_datatypes = {'acc':[4145,4146,4147],
-        'ecg':[4113],
-        'resp':[4129,4130]}
-    datatypes = {'activity':[49],
-        'cadence':[53],
-        'heartrate':[19],
-        'minuteventilation':[36],
-        'vt':[37],
-        'breathingrate':[33],
+    raw_datatypes = {#'acc':[4145,4146,4147],
+        #'ecg':[4113],
+        #'resp':[4129,4130]
+        }
+    datatypes = {#'activity':[49],
+        #'cadence':[53],
+        #'heartrate':[19],
+        #'minuteventilation':[36],
+        #'vt':[37],
+        #'breathingrate':[33],
         'hr_quality':[1000],
-        'br_quality':[1001],
-        'inspiration':[34],
-        'expiration':[35],
-        'batt':[247],
-        'step':[52],
+        #'br_quality':[1001],
+        #'inspiration':[34],
+        #'expiration':[35],
+        #'batt':[247],
+        #'step':[52],
         'rrinterval':[18],
-        'qrs':[22],
+        #'qrs':[22],
     }
 
 elif MODEL == 'CHA3000':
@@ -195,10 +194,13 @@ def getUnsubsampledData(auth,userID,start,end,dataID):
         b = min(end,a+sampPerIter)
         while a < end:
             dat = auth.api.data.list(start=a,end=b,user=userID,datatype=dataID)
-            if len(dat.response.result[0]['data'].values()[0]) > 0:
-                ts = zip(*dat.response.result[0][u'data'].values()[0])[0]
-                data = [zip(*dat.response.result[0][u'data'][str(v)])[1] for v in dataID]
-                out.extend(zip(ts,*data))
+            try:
+                if len(dat.response.result[0]['data'].values()[0]) > 0:
+                    ts = zip(*dat.response.result[0][u'data'].values()[0])[0]
+                    data = [zip(*dat.response.result[0][u'data'][str(v)])[1] for v in dataID]
+                    out.extend(zip(ts,*data))
+            except:
+                pass
             a = min(a + sampPerIter,end)
             b = min(b + sampPerIter,end)
             time.sleep(0.2)  # Rate limiting to stay below 5 requests per second
@@ -292,12 +294,23 @@ def clearCache(auth):
 
 def saveTxt(data,dirname):
     # Receive data as a dictionnary. dict key will be the filename, and its values will be contained in the file.
-    dirname = dirname + str(data['info'][u'user'].email) + '/' + str(data['info']['id'])+ '/'  # construct a reasonable name for the file
+    date = data['info']['start_date'].split('T')[0]
+    time = data['info']['start_date'].split('T')[1].split('+')[0]
+    time = datetime.datetime.strptime(time, '%H:%M:%S').strftime('%H_%M_%S')
+    date = datetime.datetime.strptime(date, '%Y-%m-%d').strftime('%Y_%m_%d')
+    timedate = date + '_' + time
+
+    user = str(data['info'][u'user'].email).split('+')[1].split('@')[0]
+    record_entry = user + '_' + timedate +'_'+ str(data['info']['id'])
+
+    dirname = dirname + user + '/' + record_entry+ '/'
+    # construct a reasonable name for the file
+
     if not os.path.isdir(dirname):
         os.makedirs(dirname)
     for k,v in data.items():
         filestring = ''
-        f = open(dirname + str(k) + '.txt', "w")
+        f = open(dirname + str(data['info']['id'])+'_'+ str(k) + '.csv', "w")
         if k == 'info':
             for kk, vv in v.items():
                 filestring += '%s : %s\n' % (str(kk),str(vv))
@@ -311,9 +324,9 @@ def saveTxt(data,dirname):
                 linelen = len(entry)
                 for i, entrySub in enumerate(entry):
                     if i == 0:
-                        filestring += (str(entrySub) + '\t')  # if timestamp is a float, convert to long integer
+                        filestring += (str(entrySub) + ',')  # if timestamp is a float, convert to long integer
                     elif i < linelen-1:
-                        filestring += (str(entrySub) + '\t')
+                        filestring += (str(entrySub) + ',')
                     else:
                         filestring += (str(entrySub) + '\n')
         f.write(filestring)
